@@ -27,17 +27,17 @@ require_once AIVE_PLUGIN_DIR . 'includes/class-ai-visibility-feed.php';
  * @return void
  */
 function aive_bootstrap() {
-        $settings        = new AI_Visibility_Settings();
-        $rest_controller = new AI_Visibility_REST_Controller( $settings );
-        $feed            = new AI_Visibility_Feed( $settings, $rest_controller );
-        $meta            = new AI_Visibility_Meta( $settings );
+	$settings        = new AI_Visibility_Settings();
+	$rest_controller = new AI_Visibility_REST_Controller( $settings );
+	$feed            = new AI_Visibility_Feed( $settings, $rest_controller );
+	$meta            = new AI_Visibility_Meta( $settings );
 
-        $settings->set_feed( $feed );
+	$settings->set_feed( $feed );
 
-        $settings->register();
-        $meta->register();
-        $rest_controller->register();
-        $feed->register();
+	$settings->register();
+	$meta->register();
+	$rest_controller->register();
+	$feed->register();
 }
 
 aive_bootstrap();
