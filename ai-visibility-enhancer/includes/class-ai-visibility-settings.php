@@ -1,0 +1,319 @@
+<?php
+/**
+ * Settings manager for the AI Visibility Enhancer plugin.
+ *
+ * @package AI_Visibility_Enhancer
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+/**
+ * Registers and exposes plugin settings.
+ */
+class AI_Visibility_Settings {
+        /**
+         * Option key used to store settings.
+         */
+        const OPTION_KEY = 'aive_settings';
+
+        /**
+         * Feed generator instance.
+         *
+         * @var AI_Visibility_Feed|null
+         */
+        private $feed = null;
+
+        /**
+         * Default settings.
+         *
+         * @var array
+         */
+	private $defaults = array(
+		'default_summary_length' => 120,
+		'expose_keywords'       => true,
+		'enable_cache'          => true,
+		'cache_ttl'             => 5 * MINUTE_IN_SECONDS,
+		'allow_public_endpoint' => true,
+	);
+
+	/**
+	 * Hook registrations.
+	 *
+	 * @return void
+	 */
+        public function register() {
+                add_action( 'admin_init', array( $this, 'register_settings' ) );
+                add_action( 'admin_menu', array( $this, 'register_menu' ) );
+                add_filter( 'plugin_action_links_' . plugin_basename( AIVE_PLUGIN_DIR . 'ai-visibility-enhancer.php' ), array( $this, 'register_action_links' ) );
+        }
+
+        /**
+         * Injects dependencies for rendering context.
+         *
+         * @param AI_Visibility_Feed $feed Feed generator instance.
+         *
+         * @return void
+         */
+        public function set_feed( AI_Visibility_Feed $feed ) {
+                $this->feed = $feed;
+        }
+
+	/**
+	 * Retrieves the merged settings.
+	 *
+	 * @return array
+	 */
+	public function get_settings() {
+		$settings = get_option( self::OPTION_KEY, array() );
+
+		return wp_parse_args( $settings, $this->defaults );
+	}
+
+	/**
+	 * Returns a single setting value.
+	 *
+	 * @param string $key Setting key.
+	 *
+	 * @return mixed|null
+	 */
+	public function get_setting( $key ) {
+		$settings = $this->get_settings();
+
+		return isset( $settings[ $key ] ) ? $settings[ $key ] : null;
+	}
+
+	/**
+	 * Registers settings fields.
+	 *
+	 * @return void
+	 */
+	public function register_settings() {
+		register_setting(
+			'aive_settings_group',
+			self::OPTION_KEY,
+			array(
+				'sanitize_callback' => array( $this, 'sanitize_settings' ),
+			)
+		);
+
+		add_settings_section(
+			'aive_general_section',
+			__( 'General AI Visibility Settings', 'ai-visibility-enhancer' ),
+			'__return_false',
+			'ai-visibility-enhancer'
+		);
+
+		add_settings_field(
+			'default_summary_length',
+			__( 'Default AI Summary Length (words)', 'ai-visibility-enhancer' ),
+			array( $this, 'render_summary_length_field' ),
+			'ai-visibility-enhancer',
+			'aive_general_section'
+		);
+
+		add_settings_field(
+			'expose_keywords',
+			__( 'Expose custom AI keywords', 'ai-visibility-enhancer' ),
+			array( $this, 'render_checkbox_field' ),
+			'ai-visibility-enhancer',
+			'aive_general_section',
+			array(
+				'label_for' => 'expose_keywords',
+			)
+		);
+
+		add_settings_field(
+			'allow_public_endpoint',
+			__( 'Allow public AI content endpoint', 'ai-visibility-enhancer' ),
+			array( $this, 'render_checkbox_field' ),
+			'ai-visibility-enhancer',
+			'aive_general_section',
+			array(
+				'label_for' => 'allow_public_endpoint',
+			)
+		);
+
+		add_settings_field(
+			'enable_cache',
+			__( 'Enable response caching', 'ai-visibility-enhancer' ),
+			array( $this, 'render_checkbox_field' ),
+			'ai-visibility-enhancer',
+			'aive_general_section',
+			array(
+				'label_for' => 'enable_cache',
+			)
+		);
+
+		add_settings_field(
+			'cache_ttl',
+			__( 'Cache lifetime (seconds)', 'ai-visibility-enhancer' ),
+			array( $this, 'render_cache_ttl_field' ),
+			'ai-visibility-enhancer',
+			'aive_general_section'
+		);
+	}
+
+	/**
+	 * Registers the settings page menu.
+	 *
+	 * @return void
+	 */
+        public function register_menu() {
+                add_options_page(
+                        __( 'AI Visibility Enhancer', 'ai-visibility-enhancer' ),
+                        __( 'AI Visibility Enhancer', 'ai-visibility-enhancer' ),
+                        'manage_options',
+                        'ai-visibility-enhancer',
+                        array( $this, 'render_settings_page' )
+                );
+        }
+
+        /**
+         * Adds the settings link to the plugins list.
+         *
+         * @param array $links Existing action links.
+         *
+         * @return array
+         */
+        public function register_action_links( $links ) {
+                $links[] = sprintf(
+                        '<a href="%s">%s</a>',
+                        esc_url( admin_url( 'options-general.php?page=ai-visibility-enhancer' ) ),
+                        esc_html__( 'Settings', 'ai-visibility-enhancer' )
+                );
+
+                return $links;
+        }
+
+	/**
+	 * Renders the summary length input.
+	 *
+	 * @return void
+	 */
+	public function render_summary_length_field() {
+		$settings = $this->get_settings();
+		$length   = (int) $settings['default_summary_length'];
+
+		printf(
+			'<input type="number" id="default_summary_length" name="%1$s[default_summary_length]" value="%2$d" min="30" max="400" step="5" class="small-text" />',
+			esc_attr( self::OPTION_KEY ),
+			esc_attr( $length )
+		);
+		echo '<p class="description">' . esc_html__( 'Controls fallback AI summary length when no manual summary is provided.', 'ai-visibility-enhancer' ) . '</p>';
+	}
+
+	/**
+	 * Renders a checkbox input.
+	 *
+	 * @param array $args Field arguments.
+	 *
+	 * @return void
+	 */
+	public function render_checkbox_field( $args ) {
+		$settings = $this->get_settings();
+		$key      = $args['label_for'];
+		$checked  = ! empty( $settings[ $key ] );
+
+		printf(
+			'<label><input type="checkbox" id="%1$s" name="%2$s[%1$s]" value="1" %3$s /> %4$s</label>',
+			esc_attr( $key ),
+			esc_attr( self::OPTION_KEY ),
+			checked( $checked, true, false ),
+			$this->get_checkbox_label( $key )
+		);
+	}
+
+	/**
+	 * Provides checkbox descriptions.
+	 *
+	 * @param string $key Field key.
+	 *
+	 * @return string
+	 */
+	private function get_checkbox_label( $key ) {
+		switch ( $key ) {
+			case 'expose_keywords':
+				return esc_html__( 'Expose manually curated keywords in schema and API responses.', 'ai-visibility-enhancer' );
+			case 'allow_public_endpoint':
+				return esc_html__( 'Allow unauthenticated access to AI summaries via the REST endpoint.', 'ai-visibility-enhancer' );
+			case 'enable_cache':
+				return esc_html__( 'Cache schema and REST responses for faster AI crawler access.', 'ai-visibility-enhancer' );
+			default:
+				return '';
+		}
+	}
+
+	/**
+	 * Renders the cache TTL field.
+	 *
+	 * @return void
+	 */
+	public function render_cache_ttl_field() {
+		$settings = $this->get_settings();
+		$ttl      = (int) $settings['cache_ttl'];
+
+		printf(
+			'<input type="number" id="cache_ttl" name="%1$s[cache_ttl]" value="%2$d" min="60" max="86400" step="30" class="small-text" />',
+			esc_attr( self::OPTION_KEY ),
+			esc_attr( $ttl )
+		);
+		echo '<p class="description">' . esc_html__( 'Duration for cached schema and endpoint payloads in seconds.', 'ai-visibility-enhancer' ) . '</p>';
+	}
+
+	/**
+	 * Renders the settings page content.
+	 *
+	 * @return void
+	 */
+        public function render_settings_page() {
+                if ( ! current_user_can( 'manage_options' ) ) {
+                return;
+                }
+        ?>
+        <div class="wrap">
+                <h1><?php esc_html_e( 'AI Visibility Enhancer', 'ai-visibility-enhancer' ); ?></h1>
+                <?php if ( $this->feed ) :
+                        $manifest_url = $this->feed->get_manifest_url();
+                        $manifest_path = $this->feed->get_manifest_path();
+                        if ( $manifest_url && file_exists( $manifest_path ) ) : ?>
+                                <p class="description">
+                                        <?php esc_html_e( 'Download the latest AI agent manifest generated by the plugin:', 'ai-visibility-enhancer' ); ?>
+                                        <a href="<?php echo esc_url( $manifest_url ); ?>" target="_blank" rel="noopener noreferrer">
+                                                <?php esc_html_e( 'View AI manifest', 'ai-visibility-enhancer' ); ?>
+                                        </a>
+                                </p>
+                        <?php else : ?>
+                                <p class="description"><?php esc_html_e( 'The AI manifest will be generated after publishing public content.', 'ai-visibility-enhancer' ); ?></p>
+                        <?php endif;
+                endif; ?>
+                <form action="options.php" method="post">
+                        <?php
+                        settings_fields( 'aive_settings_group' );
+                        do_settings_sections( 'ai-visibility-enhancer' );
+                        submit_button();
+			?>
+		</form>
+	</div>
+	<?php
+}
+
+/**
+ * Sanitizes the settings payload.
+ *
+ * @param array $settings Raw settings.
+ *
+ * @return array
+ */
+public function sanitize_settings( $settings ) {
+$settings = is_array( $settings ) ? $settings : array();
+
+$settings['default_summary_length'] = max( 30, min( 400, isset( $settings['default_summary_length'] ) ? (int) $settings['default_summary_length'] : $this->defaults['default_summary_length'] ) );
+$settings['cache_ttl']              = max( 60, min( DAY_IN_SECONDS, isset( $settings['cache_ttl'] ) ? (int) $settings['cache_ttl'] : $this->defaults['cache_ttl'] ) );
+
+$settings['expose_keywords']       = ! empty( $settings['expose_keywords'] );
+$settings['enable_cache']          = ! empty( $settings['enable_cache'] );
+$settings['allow_public_endpoint'] = ! empty( $settings['allow_public_endpoint'] );
+
+return $settings;
+}
+}
