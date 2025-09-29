@@ -62,6 +62,11 @@ class AI_Visibility_Feed {
                 add_action( 'untrashed_post', array( $this, 'regenerate_manifest' ) );
                 add_action( 'deleted_post', array( $this, 'regenerate_manifest' ) );
                 add_action( 'update_option_' . AI_Visibility_Settings::OPTION_KEY, array( $this, 'regenerate_manifest' ), 10, 0 );
+                add_action( 'wp_head', array( $this, 'inject_manifest_link' ), 5 );
+                add_filter( 'robots_txt', array( $this, 'augment_robots_txt' ), 10, 2 );
+                add_action( 'init', array( $this, 'register_well_known_alias' ) );
+                add_filter( 'query_vars', array( $this, 'register_query_vars' ) );
+                add_action( 'template_redirect', array( $this, 'maybe_output_well_known_manifest' ) );
         }
 
         /**
@@ -90,6 +95,18 @@ class AI_Visibility_Feed {
                 }
 
                 $this->generate_manifest();
+        }
+
+        /**
+         * Registers the query vars used for manifest aliases.
+         *
+         * @param array $vars Public query vars.
+         * @return array
+         */
+        public function register_query_vars( $vars ) {
+                $vars[] = 'aive_manifest';
+
+                return $vars;
         }
 
         /**
@@ -154,22 +171,98 @@ class AI_Visibility_Feed {
          * @return bool
          */
         private function locate_paths() {
-                $upload_dir = wp_upload_dir();
+                $root_path = trailingslashit( ABSPATH );
+                $file_path = $root_path . 'aive-manifest.json';
 
-                if ( empty( $upload_dir['basedir'] ) || empty( $upload_dir['baseurl'] ) ) {
-                        return false;
-                }
+		if ( file_exists( $file_path ) ) {
+			if ( ! is_writable( $file_path ) ) {
+				return false;
+			}
+		} elseif ( ! is_writable( $root_path ) ) {
+			return false;
+		}
 
-                $directory = trailingslashit( $upload_dir['basedir'] ) . 'ai-visibility';
-
-                if ( ! wp_mkdir_p( $directory ) ) {
-                        return false;
-                }
-
-                $this->file_path = trailingslashit( $directory ) . 'aive-manifest.json';
-                $this->file_url  = trailingslashit( $upload_dir['baseurl'] ) . 'ai-visibility/aive-manifest.json';
+		$this->file_path = $file_path;
+		$this->file_url  = trailingslashit( home_url() ) . 'aive-manifest.json';
 
                 return true;
+        }
+
+        /**
+         * Registers the `.well-known` alias rewrite rule.
+         *
+         * @return void
+         */
+        public function register_well_known_alias() {
+                add_rewrite_rule( '^\.well-known/ai-manifest\.json$', 'index.php?aive_manifest=1', 'top' );
+        }
+
+        /**
+         * Outputs the manifest when requested via the `.well-known` alias.
+         *
+         * @return void
+         */
+        public function maybe_output_well_known_manifest() {
+                if ( 1 !== (int) get_query_var( 'aive_manifest', 0 ) ) {
+                        return;
+                }
+
+                if ( ! $this->locate_paths() || ! file_exists( $this->file_path ) ) {
+                        status_header( 404 );
+                        exit;
+                }
+
+                status_header( 200 );
+                header( 'Content-Type: application/json; charset=utf-8' );
+
+                readfile( $this->file_path );
+                exit;
+        }
+
+        /**
+         * Injects autodiscovery link tag for the manifest.
+         *
+         * @return void
+         */
+        public function inject_manifest_link() {
+                $url = $this->get_manifest_url();
+
+                if ( ! $url ) {
+                        return;
+                }
+
+                printf( '<link rel="ai-manifest" href="%s" />' . "\n", esc_url( $url ) );
+        }
+
+        /**
+         * Appends manifest metadata to robots.txt output.
+         *
+         * @param string $output Current robots output.
+         * @param bool   $public Whether the site is public.
+         * @return string
+         */
+        public function augment_robots_txt( $output, $public ) {
+                if ( ! $public ) {
+                        return $output;
+                }
+
+                $lines = array( '# AI Visibility Enhancer' );
+
+                $manifest = $this->get_manifest_url();
+                if ( $manifest ) {
+                        $lines[] = 'AI-Manifest: ' . esc_url_raw( $manifest );
+                }
+
+                $collection = rest_url( trailingslashit( $this->rest_controller->get_namespace() ) . $this->rest_controller->get_rest_base() );
+                $lines[]    = 'AI-Collection: ' . esc_url_raw( $collection );
+
+                $output = rtrim( $output );
+
+                if ( '' !== $output ) {
+                        $output .= "\n";
+                }
+
+                return $output . implode( "\n", $lines ) . "\n";
         }
 
         /**
@@ -239,5 +332,24 @@ class AI_Visibility_Feed {
                 $allowed  = array_unique( array_merge( $required, $fields ) );
 
                 return array_intersect_key( $item, array_flip( $allowed ) );
+        }
+
+        /**
+         * Adds rewrite rules on activation.
+         *
+         * @return void
+         */
+        public static function activate() {
+                add_rewrite_rule( '^\.well-known/ai-manifest\.json$', 'index.php?aive_manifest=1', 'top' );
+                flush_rewrite_rules();
+        }
+
+        /**
+         * Flushes rewrite rules on deactivation.
+         *
+         * @return void
+         */
+        public static function deactivate() {
+                flush_rewrite_rules();
         }
 }
