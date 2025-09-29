@@ -35,6 +35,8 @@ class AI_Visibility_Settings {
                 'enable_cache'          => true,
                 'cache_ttl'             => 5 * MINUTE_IN_SECONDS,
                 'allow_public_endpoint' => true,
+                'summary_strategy'      => 'fallback',
+                'user_agent_whitelist'  => array(),
                 'manifest_fields'       => array(
                         'summary',
                         'keywords',
@@ -54,14 +56,15 @@ class AI_Visibility_Settings {
 	 *
 	 * @return void
 	 */
-	public function register() {
-		add_action( 'admin_init', array( $this, 'register_settings' ) );
-		add_action( 'admin_menu', array( $this, 'register_menu' ) );
-		add_filter(
-			'plugin_action_links_' . plugin_basename( AIVE_PLUGIN_DIR . 'ai-visibility-enhancer.php' ),
-			array( $this, 'register_action_links' )
-		);
-	}
+        public function register() {
+                add_action( 'admin_init', array( $this, 'register_settings' ) );
+                add_action( 'admin_menu', array( $this, 'register_menu' ) );
+                add_filter(
+                        'plugin_action_links_' . plugin_basename( AIVE_PLUGIN_DIR . 'ai-visibility-enhancer.php' ),
+                        array( $this, 'register_action_links' )
+                );
+                add_filter( 'aive_user_agent_whitelist', array( $this, 'filter_user_agent_whitelist' ) );
+        }
 
 	/**
 	 * Injects dependencies for rendering context.
@@ -139,20 +142,20 @@ class AI_Visibility_Settings {
 			array( 'label_for' => 'expose_keywords' )
 		);
 
-		add_settings_field(
-			'allow_public_endpoint',
-			__( 'Allow public AI content endpoint', 'ai-visibility-enhancer' ),
-			array( $this, 'render_checkbox_field' ),
-			'ai-visibility-enhancer',
-			'aive_general_section',
+                add_settings_field(
+                        'allow_public_endpoint',
+                        __( 'Allow public AI content endpoint', 'ai-visibility-enhancer' ),
+                        array( $this, 'render_checkbox_field' ),
+                        'ai-visibility-enhancer',
+                        'aive_general_section',
 			array( 'label_for' => 'allow_public_endpoint' )
 		);
 
-		add_settings_field(
-			'enable_cache',
-			__( 'Enable response caching', 'ai-visibility-enhancer' ),
-			array( $this, 'render_checkbox_field' ),
-			'ai-visibility-enhancer',
+                add_settings_field(
+                        'enable_cache',
+                        __( 'Enable response caching', 'ai-visibility-enhancer' ),
+                        array( $this, 'render_checkbox_field' ),
+                        'ai-visibility-enhancer',
 			'aive_general_section',
 			array( 'label_for' => 'enable_cache' )
 		);
@@ -161,6 +164,22 @@ class AI_Visibility_Settings {
                         'cache_ttl',
                         __( 'Cache lifetime (seconds)', 'ai-visibility-enhancer' ),
                         array( $this, 'render_cache_ttl_field' ),
+                        'ai-visibility-enhancer',
+                        'aive_general_section'
+                );
+
+                add_settings_field(
+                        'summary_strategy',
+                        __( 'Summary generation strategy', 'ai-visibility-enhancer' ),
+                        array( $this, 'render_summary_strategy_field' ),
+                        'ai-visibility-enhancer',
+                        'aive_general_section'
+                );
+
+                add_settings_field(
+                        'user_agent_whitelist',
+                        __( 'Allowed AI User-Agents', 'ai-visibility-enhancer' ),
+                        array( $this, 'render_user_agent_whitelist_field' ),
                         'ai-visibility-enhancer',
                         'aive_general_section'
                 );
@@ -195,14 +214,31 @@ class AI_Visibility_Settings {
 	 * @param array $links Existing action links.
 	 * @return array
 	 */
-	public function register_action_links( $links ) {
-		$links[] = sprintf(
-			'<a href="%s">%s</a>',
-			esc_url( admin_url( 'options-general.php?page=ai-visibility-enhancer' ) ),
-			esc_html__( 'Settings', 'ai-visibility-enhancer' )
-		);
-		return $links;
-	}
+        public function register_action_links( $links ) {
+                $links[] = sprintf(
+                        '<a href="%s">%s</a>',
+                        esc_url( admin_url( 'options-general.php?page=ai-visibility-enhancer' ) ),
+                        esc_html__( 'Settings', 'ai-visibility-enhancer' )
+                );
+                return $links;
+        }
+
+        /**
+         * Provides the User-Agent whitelist for API filtering.
+         *
+         * @param array $whitelist Existing patterns.
+         * @return array
+         */
+        public function filter_user_agent_whitelist( $whitelist ) {
+                $settings = $this->get_settings();
+                $custom   = isset( $settings['user_agent_whitelist'] ) ? (array) $settings['user_agent_whitelist'] : array();
+
+                if ( empty( $custom ) ) {
+                        return $whitelist;
+                }
+
+                return array_unique( array_merge( $whitelist, $custom ) );
+        }
 
 	/**
 	 * Renders the summary length input.
@@ -288,6 +324,53 @@ class AI_Visibility_Settings {
 
                 echo '<p class="description">' . esc_html__( 'Choose which optional data points should be written to the AI manifest alongside the required identifiers.', 'ai-visibility-enhancer' ) . '</p>';
                 echo '</fieldset>';
+        }
+
+        /**
+         * Renders summary strategy options.
+         *
+         * @return void
+         */
+        public function render_summary_strategy_field() {
+                $settings = $this->get_settings();
+                $current  = isset( $settings['summary_strategy'] ) ? $settings['summary_strategy'] : $this->defaults['summary_strategy'];
+                $options  = array(
+                        'manual'          => __( 'Prefer manual summaries', 'ai-visibility-enhancer' ),
+                        'excerpt'         => __( 'Use the excerpt when available', 'ai-visibility-enhancer' ),
+                        'first_paragraph' => __( 'Use the first paragraph of content', 'ai-visibility-enhancer' ),
+                        'fallback'        => __( 'Automatic fallback to generated summaries', 'ai-visibility-enhancer' ),
+                );
+
+                echo '<fieldset>';
+                foreach ( $options as $key => $label ) {
+                        printf(
+                                '<label><input type="radio" name="%1$s[summary_strategy]" value="%2$s" %3$s /> %4$s</label><br />',
+                                esc_attr( self::OPTION_KEY ),
+                                esc_attr( $key ),
+                                checked( $current, $key, false ),
+                                esc_html( $label )
+                        );
+                }
+                echo '<p class="description">' . esc_html__( 'Control how the plugin derives summaries when no manual value is supplied.', 'ai-visibility-enhancer' ) . '</p>';
+                echo '</fieldset>';
+        }
+
+        /**
+         * Renders the user agent whitelist textarea.
+         *
+         * @return void
+         */
+        public function render_user_agent_whitelist_field() {
+                $settings = $this->get_settings();
+                $value    = isset( $settings['user_agent_whitelist'] ) ? implode( "\n", (array) $settings['user_agent_whitelist'] ) : '';
+
+                printf(
+                        '<textarea id="user_agent_whitelist" name="%1$s[user_agent_whitelist]" rows="4" style="width: 25em;">%2$s</textarea>',
+                        esc_attr( self::OPTION_KEY ),
+                        esc_textarea( $value )
+                );
+
+                echo '<p class="description">' . esc_html__( 'One regular expression per line. Only matching AI User-Agents will be served the API endpoints when a whitelist is configured.', 'ai-visibility-enhancer' ) . '</p>';
         }
 
         /**
@@ -387,6 +470,23 @@ class AI_Visibility_Settings {
                 $settings['expose_keywords']       = ! empty( $settings['expose_keywords'] );
                 $settings['enable_cache']          = ! empty( $settings['enable_cache'] );
                 $settings['allow_public_endpoint'] = ! empty( $settings['allow_public_endpoint'] );
+
+                $allowed_strategies          = array( 'manual', 'excerpt', 'first_paragraph', 'fallback' );
+                $settings['summary_strategy'] = in_array( isset( $settings['summary_strategy'] ) ? $settings['summary_strategy'] : '', $allowed_strategies, true )
+                        ? $settings['summary_strategy']
+                        : $this->defaults['summary_strategy'];
+
+                $whitelist = array();
+                if ( isset( $settings['user_agent_whitelist'] ) ) {
+                        $lines = explode( "\n", $settings['user_agent_whitelist'] );
+                        foreach ( $lines as $line ) {
+                                $line = trim( wp_strip_all_tags( $line ) );
+                                if ( '' !== $line ) {
+                                        $whitelist[] = $line;
+                                }
+                        }
+                }
+                $settings['user_agent_whitelist'] = $whitelist;
 
                 $options = array_keys( $this->get_manifest_field_options() );
                 $fields  = array();
