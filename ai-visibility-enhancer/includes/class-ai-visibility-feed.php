@@ -195,7 +195,8 @@ class AI_Visibility_Feed {
                 $items   = array();
 
                 foreach ( $posts as $post ) {
-                        $items[] = $this->rest_controller->prepare_item_for_response( $post, $request );
+                        $item     = $this->rest_controller->prepare_item_for_response( $post, $request );
+                        $items[]  = $this->filter_manifest_item_fields( $item );
                 }
 
                 $manifest = apply_filters(
@@ -219,5 +220,24 @@ class AI_Visibility_Feed {
                 }
 
                 file_put_contents( $this->file_path, $json );
+        }
+
+        /**
+         * Filters manifest item data according to settings.
+         *
+         * @param array $item Item payload.
+         * @return array
+         */
+        private function filter_manifest_item_fields( $item ) {
+                if ( ! is_array( $item ) ) {
+                        return array();
+                }
+
+                $fields   = $this->settings->get_setting( 'manifest_fields' );
+                $fields   = is_array( $fields ) ? $fields : array();
+                $required = array( 'id', 'url', 'title' );
+                $allowed  = array_unique( array_merge( $required, $fields ) );
+
+                return array_intersect_key( $item, array_flip( $allowed ) );
         }
 }

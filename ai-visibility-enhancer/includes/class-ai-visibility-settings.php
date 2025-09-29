@@ -29,13 +29,25 @@ class AI_Visibility_Settings {
 	 *
 	 * @var array
 	 */
-	private $defaults = array(
-		'default_summary_length' => 120,
-		'expose_keywords'       => true,
-		'enable_cache'          => true,
-		'cache_ttl'             => 5 * MINUTE_IN_SECONDS,
-		'allow_public_endpoint' => true,
-	);
+        private $defaults = array(
+                'default_summary_length' => 120,
+                'expose_keywords'       => true,
+                'enable_cache'          => true,
+                'cache_ttl'             => 5 * MINUTE_IN_SECONDS,
+                'allow_public_endpoint' => true,
+                'manifest_fields'       => array(
+                        'summary',
+                        'keywords',
+                        'audience',
+                        'language',
+                        'updated_at',
+                        'published_at',
+                        'author',
+                        'categories',
+                        'tags',
+                        'content_hash',
+                ),
+        );
 
 	/**
 	 * Hook registrations.
@@ -96,12 +108,19 @@ class AI_Visibility_Settings {
 			)
 		);
 
-		add_settings_section(
-			'aive_general_section',
-			__( 'General AI Visibility Settings', 'ai-visibility-enhancer' ),
-			'__return_false',
-			'ai-visibility-enhancer'
-		);
+                add_settings_section(
+                        'aive_general_section',
+                        __( 'General AI Visibility Settings', 'ai-visibility-enhancer' ),
+                        '__return_false',
+                        'ai-visibility-enhancer'
+                );
+
+                add_settings_section(
+                        'aive_manifest_section',
+                        __( 'Manifest Output Settings', 'ai-visibility-enhancer' ),
+                        '__return_false',
+                        'ai-visibility-enhancer'
+                );
 
 		add_settings_field(
 			'default_summary_length',
@@ -138,13 +157,21 @@ class AI_Visibility_Settings {
 			array( 'label_for' => 'enable_cache' )
 		);
 
-		add_settings_field(
-			'cache_ttl',
-			__( 'Cache lifetime (seconds)', 'ai-visibility-enhancer' ),
-			array( $this, 'render_cache_ttl_field' ),
-			'ai-visibility-enhancer',
-			'aive_general_section'
-		);
+                add_settings_field(
+                        'cache_ttl',
+                        __( 'Cache lifetime (seconds)', 'ai-visibility-enhancer' ),
+                        array( $this, 'render_cache_ttl_field' ),
+                        'ai-visibility-enhancer',
+                        'aive_general_section'
+                );
+
+                add_settings_field(
+                        'manifest_fields',
+                        __( 'Manifest data fields', 'ai-visibility-enhancer' ),
+                        array( $this, 'render_manifest_fields_field' ),
+                        'ai-visibility-enhancer',
+                        'aive_manifest_section'
+                );
 	}
 
 	/**
@@ -220,18 +247,68 @@ class AI_Visibility_Settings {
 	 * @param string $key Field key.
 	 * @return string
 	 */
-	private function get_checkbox_label( $key ) {
-		switch ( $key ) {
-			case 'expose_keywords':
-				return esc_html__( 'Expose manually curated keywords in schema and API responses.', 'ai-visibility-enhancer' );
-			case 'allow_public_endpoint':
-				return esc_html__( 'Allow unauthenticated access to AI summaries via the REST endpoint.', 'ai-visibility-enhancer' );
-			case 'enable_cache':
-				return esc_html__( 'Cache schema and REST responses for faster AI crawler access.', 'ai-visibility-enhancer' );
-			default:
-				return '';
-		}
-	}
+        private function get_checkbox_label( $key ) {
+                switch ( $key ) {
+                        case 'expose_keywords':
+                                return esc_html__( 'Expose manually curated keywords in schema and API responses.', 'ai-visibility-enhancer' );
+                        case 'allow_public_endpoint':
+                                return esc_html__( 'Allow unauthenticated access to AI summaries via the REST endpoint.', 'ai-visibility-enhancer' );
+                        case 'enable_cache':
+                                return esc_html__( 'Cache schema and REST responses for faster AI crawler access.', 'ai-visibility-enhancer' );
+                        default:
+                                return '';
+                }
+        }
+
+        /**
+         * Renders checkboxes to select manifest fields.
+         *
+         * @return void
+         */
+        public function render_manifest_fields_field() {
+                $settings = $this->get_settings();
+                $selected = isset( $settings['manifest_fields'] ) && is_array( $settings['manifest_fields'] )
+                        ? $settings['manifest_fields']
+                        : $this->defaults['manifest_fields'];
+
+                $options = $this->get_manifest_field_options();
+
+                echo '<fieldset>';
+                echo '<legend class="screen-reader-text">' . esc_html__( 'Select manifest data fields', 'ai-visibility-enhancer' ) . '</legend>';
+
+                foreach ( $options as $key => $label ) {
+                        printf(
+                                '<label><input type="checkbox" name="%1$s[manifest_fields][]" value="%2$s" %3$s /> %4$s</label><br />',
+                                esc_attr( self::OPTION_KEY ),
+                                esc_attr( $key ),
+                                checked( in_array( $key, $selected, true ), true, false ),
+                                esc_html( $label )
+                        );
+                }
+
+                echo '<p class="description">' . esc_html__( 'Choose which optional data points should be written to the AI manifest alongside the required identifiers.', 'ai-visibility-enhancer' ) . '</p>';
+                echo '</fieldset>';
+        }
+
+        /**
+         * Returns manifest field options.
+         *
+         * @return array
+         */
+        private function get_manifest_field_options() {
+                return array(
+                        'summary'      => __( 'AI summary', 'ai-visibility-enhancer' ),
+                        'keywords'     => __( 'Keywords', 'ai-visibility-enhancer' ),
+                        'audience'     => __( 'Audience descriptors', 'ai-visibility-enhancer' ),
+                        'language'     => __( 'Content language', 'ai-visibility-enhancer' ),
+                        'updated_at'   => __( 'Last modified date', 'ai-visibility-enhancer' ),
+                        'published_at' => __( 'Publication date', 'ai-visibility-enhancer' ),
+                        'author'       => __( 'Author details', 'ai-visibility-enhancer' ),
+                        'categories'   => __( 'Categories', 'ai-visibility-enhancer' ),
+                        'tags'         => __( 'Tags', 'ai-visibility-enhancer' ),
+                        'content_hash' => __( 'Content hash', 'ai-visibility-enhancer' ),
+                );
+        }
 
 	/**
 	 * Renders the cache TTL field.
@@ -307,10 +384,23 @@ class AI_Visibility_Settings {
 			min( DAY_IN_SECONDS, isset( $settings['cache_ttl'] ) ? (int) $settings['cache_ttl'] : $this->defaults['cache_ttl'] )
 		);
 
-		$settings['expose_keywords']       = ! empty( $settings['expose_keywords'] );
-		$settings['enable_cache']          = ! empty( $settings['enable_cache'] );
-		$settings['allow_public_endpoint'] = ! empty( $settings['allow_public_endpoint'] );
+                $settings['expose_keywords']       = ! empty( $settings['expose_keywords'] );
+                $settings['enable_cache']          = ! empty( $settings['enable_cache'] );
+                $settings['allow_public_endpoint'] = ! empty( $settings['allow_public_endpoint'] );
 
-		return $settings;
-	}
+                $options = array_keys( $this->get_manifest_field_options() );
+                $fields  = array();
+
+                if ( isset( $settings['manifest_fields'] ) && is_array( $settings['manifest_fields'] ) ) {
+                        $fields = array_values( array_intersect( $options, array_map( 'sanitize_key', $settings['manifest_fields'] ) ) );
+                }
+
+                if ( empty( $fields ) ) {
+                        $fields = $this->defaults['manifest_fields'];
+                }
+
+                $settings['manifest_fields'] = $fields;
+
+                return $settings;
+        }
 }
