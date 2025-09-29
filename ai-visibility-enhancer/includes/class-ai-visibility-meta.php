@@ -106,33 +106,33 @@ class AI_Visibility_Meta {
 	 * @return void
 	 */
 	public function save_meta_box( $post_id, $post ) {
-		if ( ! isset( $_POST['aive_meta_box_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['aive_meta_box_nonce'] ) ), 'aive_meta_box' ) ) {
-		return;
-		}
+                if ( ! isset( $_POST['aive_meta_box_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['aive_meta_box_nonce'] ) ), 'aive_meta_box' ) ) {
+                        return;
+                }
 
-		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-		return;
-		}
+                if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+                        return;
+                }
 
-		if ( wp_is_post_revision( $post_id ) ) {
-		return;
-		}
+                if ( wp_is_post_revision( $post_id ) ) {
+                        return;
+                }
 
-		if ( ! current_user_can( 'edit_post', $post_id ) ) {
-		return;
-		}
+                if ( ! current_user_can( 'edit_post', $post_id ) ) {
+                        return;
+                }
 
-		foreach ( array_keys( $this->meta_fields ) as $key ) {
-		if ( isset( $_POST[ $key ] ) ) {
-			$value = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
-			update_post_meta( $post_id, $key, $value );
-		} else {
-			delete_post_meta( $post_id, $key );
-		}
-		}
+                foreach ( array_keys( $this->meta_fields ) as $key ) {
+                        if ( isset( $_POST[ $key ] ) ) {
+                                $value = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
+                                update_post_meta( $post_id, $key, $value );
+                        } else {
+                                delete_post_meta( $post_id, $key );
+                        }
+                }
 
-		$this->purge_cache( $post_id );
-	}
+                $this->purge_cache( $post_id );
+        }
 
 	/**
 	 * Injects JSON-LD schema and AI-specific meta tags.
@@ -140,46 +140,46 @@ class AI_Visibility_Meta {
 	 * @return void
 	 */
 	public function inject_structured_data() {
-		if ( ! is_singular() ) {
-		return;
-		}
+                if ( ! is_singular() ) {
+                        return;
+                }
 
-		global $post;
+                global $post;
 
-		if ( ! $post instanceof WP_Post ) {
-		return;
-		}
+                if ( ! $post instanceof WP_Post ) {
+                        return;
+                }
 
-		$settings  = $this->settings->get_settings();
-		$cache     = $settings['enable_cache'];
-		$cache_ttl = (int) $settings['cache_ttl'];
-		$cache_key = 'aive_schema_' . $post->ID;
+                $settings  = $this->settings->get_settings();
+                $cache     = $settings['enable_cache'];
+                $cache_ttl = (int) $settings['cache_ttl'];
+                $cache_key = 'aive_schema_' . $post->ID;
 
-		$payload = false;
-		if ( $cache ) {
-		$payload = get_transient( $cache_key );
-		}
+                $payload = false;
+                if ( $cache ) {
+                        $payload = get_transient( $cache_key );
+                }
 
-		if ( false === $payload ) {
-		$payload = $this->build_schema_payload( $post, $settings );
+                if ( false === $payload ) {
+                        $payload = $this->build_schema_payload( $post, $settings );
 
-		if ( $cache ) {
-		set_transient( $cache_key, $payload, $cache_ttl );
-		}
-		}
+                        if ( $cache ) {
+                                set_transient( $cache_key, $payload, $cache_ttl );
+                        }
+                }
 
-		if ( empty( $payload ) ) {
-		return;
-		}
+                if ( empty( $payload ) ) {
+                        return;
+                }
 
-		echo '<meta name="ai-summary" content="' . esc_attr( $payload['description'] ) . '" />';
+                echo '<meta name="ai-summary" content="' . esc_attr( $payload['description'] ) . '" />';
 
-		if ( ! empty( $payload['keywords'] ) && is_string( $payload['keywords'] ) ) {
-		echo '<meta name="ai-keywords" content="' . esc_attr( $payload['keywords'] ) . '" />';
-		}
+                if ( ! empty( $payload['keywords'] ) && is_string( $payload['keywords'] ) ) {
+                        echo '<meta name="ai-keywords" content="' . esc_attr( $payload['keywords'] ) . '" />';
+                }
 
-		echo '<script type="application/ld+json">' . wp_json_encode( $payload ) . '</script>';
-	}
+                echo '<script type="application/ld+json">' . wp_json_encode( $payload ) . '</script>';
+        }
 
 	/**
 	 * Builds schema payload for the current post.
@@ -302,11 +302,11 @@ class AI_Visibility_Meta {
 	 *
 	 * @return void
 	 */
-	private function purge_cache( $post_id ) {
-		if ( ! $this->settings->get_setting( 'enable_cache' ) ) {
-		return;
-		}
+        private function purge_cache( $post_id ) {
+                if ( ! $this->settings->get_setting( 'enable_cache' ) ) {
+                        return;
+                }
 
-		delete_transient( 'aive_schema_' . $post_id );
-	}
+                delete_transient( 'aive_schema_' . $post_id );
+        }
 }

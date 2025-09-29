@@ -21,6 +21,20 @@ require_once AIVE_PLUGIN_DIR . 'includes/class-ai-visibility-meta.php';
 require_once AIVE_PLUGIN_DIR . 'includes/class-ai-visibility-rest-controller.php';
 require_once AIVE_PLUGIN_DIR . 'includes/class-ai-visibility-feed.php';
 
+register_activation_hook( __FILE__, array( 'AI_Visibility_Feed', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'AI_Visibility_Feed', 'deactivate' ) );
+
+add_action( 'plugins_loaded', 'aive_load_textdomain' );
+
+/**
+ * Loads the plugin text domain for translations.
+ *
+ * @return void
+ */
+function aive_load_textdomain() {
+        load_plugin_textdomain( 'ai-visibility-enhancer', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+
 /**
  * Bootstraps the plugin.
  *
