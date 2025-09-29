@@ -153,24 +153,23 @@ class AI_Visibility_Feed {
          *
          * @return bool
          */
-        private function locate_paths() {
-                $upload_dir = wp_upload_dir();
+	private function locate_paths() {
+		$root_path = trailingslashit( ABSPATH );
+		$file_path = $root_path . 'aive-manifest.json';
 
-                if ( empty( $upload_dir['basedir'] ) || empty( $upload_dir['baseurl'] ) ) {
-                        return false;
-                }
+		if ( file_exists( $file_path ) ) {
+			if ( ! is_writable( $file_path ) ) {
+				return false;
+			}
+		} elseif ( ! is_writable( $root_path ) ) {
+			return false;
+		}
 
-                $directory = trailingslashit( $upload_dir['basedir'] ) . 'ai-visibility';
+		$this->file_path = $file_path;
+		$this->file_url  = trailingslashit( home_url() ) . 'aive-manifest.json';
 
-                if ( ! wp_mkdir_p( $directory ) ) {
-                        return false;
-                }
-
-                $this->file_path = trailingslashit( $directory ) . 'aive-manifest.json';
-                $this->file_url  = trailingslashit( $upload_dir['baseurl'] ) . 'ai-visibility/aive-manifest.json';
-
-                return true;
-        }
+		return true;
+	}
 
         /**
          * Generates the manifest payload and writes it to disk.
